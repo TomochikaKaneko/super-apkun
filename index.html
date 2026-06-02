@@ -18,6 +18,7 @@
         #game-wrapper { position: relative; width: 800px; height: 350px; transform-origin: center center; }
         #game-container { position: relative; width: 800px; height: 300px; box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
         canvas { background-color: #7ed6df; border: 4px solid #333; box-sizing: border-box; display: block; }
+        /* ★【修正】画面下の操作説明文から「しゃがみ」の表記を完全抹消！ */
         .info { position: absolute; top: 275px; left: 0; width: 100%; font-size: 11px; color: #ffffff; text-shadow: 1px 1px 0px #000000; letter-spacing: 0.5px; text-align: center; pointer-events: none; line-height: 1.3; z-index: 10; }
         #mute-switch { position: absolute; top: 15px; right: 15px; width: 44px; height: 44px; cursor: pointer; z-index: 9999; background-color: rgba(255, 255, 255, 0.85); border: 3px solid #333; border-radius: 6px; display: none; justify-content: center; align-items: center; box-sizing: border-box; touch-action: auto; }
         #mute-switch::after { content: '🔇'; font-size: 24px; }
@@ -75,8 +76,8 @@
         <canvas id="gameCanvas" width="800" height="300"></canvas>
     </div>
     <div class="info">
-        ＰＣ：[←][→]移動 / [↑]orスペースでジャンプ / [↓]長押しでしゃがむ<br>
-        スマホ：左右移動ドラッグ / タップジャンプ / 下スワイプ長押ししゃがみ
+        ＰＣ：[←][→]移動 / [↑]orスペースでジャンプ<br>
+        スマホ：左右移動ドラッグ / 画面タップでジャンプ
     </div>
 </div>
 
@@ -113,14 +114,13 @@ let flashTimer = 0;
 let isBig = false; 
 let shrinkFlashTimer = 0; 
 
-const keysPressed = { ArrowLeft: false, ArrowRight: false, ArrowDown: false };
+const keysPressed = { ArrowLeft: false, ArrowRight: false };
 
 // マルチタッチ制御用のグローバル変数
 let activeTouches = {}; 
 let moveTouchId = null;  
 let touchMoveDirection = 0; 
 let isDragging = false; 
-let swipeTriggered = false; 
 
 let cameraX = 0;
 let supplementCount = 0; 
@@ -130,11 +130,11 @@ let capsuleRotation = 0;
 
 let nextStarDistance = 300; 
 
-// プレイヤー管理
+// ★【修正】プレイヤーのデータ構造から「しゃがみ(isCrouching)」のフラグや衝突補正を完全消去！
 const appKun = {
     x: 80, y: 186, baseY: 186, imgWidth: 64, imgHeight: 64,
     hitboxOffsetX: 12, hitboxOffsetY: 14, width: 40, height: 50,
-    vy: 0, gravity: 0.6, jumpForce: -13, isGrounded: true, isCrouching: false, 
+    vy: 0, gravity: 0.6, jumpForce: -13, isGrounded: true, 
     moveSpeed: 5, animeFrame: 0, animeTimer: 0, landSquat: 0, angle: 0           
 };
 
@@ -165,7 +165,7 @@ window.addEventListener('resize', resizeGame); window.addEventListener('orientat
 // ==========================================
 const images = {};
 const imgSources = {
-    appKun1: 'images/appkun1.png', appKun2: 'images/appkun2.png', appKun3: 'images/appkun3.png', 
+    appKun1: 'images/appkun1.png', appKun2: 'images/appkun2.png', 
     bg: 'images/bg_park.png', dumbbell: 'images/dumbbell.png', barbel: 'images/barbel.png', 
     shaker: 'images/shaker.png', evilAppKun: 'images/evil_appkun.png', kettlebell: 'images/kettlebell.png',  
     brick: 'images/block_normal.png', blockSpecial: 'images/block_special.png', blockDone: 'images/block_done.png',    
@@ -187,7 +187,7 @@ function playJumpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (
 function playCoinSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; const now = audioCtx.currentTime; osc.frequency.setValueAtTime(987, now); osc.frequency.exponentialRampToValueAtTime(1318, now + 0.08); gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.25); } catch(e) {} } }
 function playPowerUpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [330, 392, 659, 523, 587, 784].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
 function playShrinkSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [784, 587, 523, 392].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
-function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.06); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
+function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
 function playGameOverSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 494, d: 0.08 }, { f: 440, d: 0.08 }, { f: 392, d: 0.12 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 311, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.4, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 function playNewRecordSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 659, d: 0.08 }, { f: 784, d: 0.08 }, { f: 1046,d: 0.16 }, { f: 0, d: 0.04 }, { f: 880, d: 0.12 }, { f: 987, d: 0.12 }, { f: 1046,d: 0.24 }, { f: 466, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.35, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 
@@ -236,10 +236,8 @@ function generateNextTerrain() {
 function initGame() {
     distance = 0; cameraX = 0; supplementCount = 0; meatRotation = 0; capsuleRotation = 0; currentSpeed = 5; currentScore = 0; enemyBonusScore = 0; nextStarDistance = 300; 
     isInvincible = false; invincibilityTimer = 0; flashTimer = 0; isBig = false; shrinkFlashTimer = 0;
-    appKun.x = 80; appKun.y = appKun.baseY; appKun.vy = 0; appKun.isGrounded = true; appKun.isCrouching = false; 
-    appKun.animeFrame = 0; appKun.animeTimer = 0; appKun.landSquat = 0; appKun.angle = 0; gameOverTimer = 0;
-    keysPressed.ArrowLeft = false; keysPressed.ArrowRight = false; keysPressed.ArrowDown = false;
-    touchMoveDirection = 0; activeTouches = {}; moveTouchId = null; isDragging = false; swipeTriggered = false;
+    appKun.x = 80; appKun.y = appKun.baseY; appKun.vy = 0; appKun.isGrounded = true; 
+    touchMoveDirection = 0; activeTouches = {}; moveTouchId = null; isDragging = false;
     staticObstacles = []; holes = []; lastGeneratedX = 400;
     for(let i=0; i<6; i++) { generateNextTerrain(); }
 }
@@ -258,7 +256,8 @@ function drawStartScreenPlaceholder() { ctx.clearRect(0, 0, 800, 300); if(images
 function processInput() {
     if (inputLocked) return; inputLocked = true; setTimeout(() => { inputLocked = false; }, 100);
     if (gameState === 'START') { handleGameStartAction(); } 
-    else if (gameState === 'PLAYING') { if (appKun.isGrounded && !appKun.isCrouching) { appKun.vy = appKun.jumpForce; appKun.isGrounded = false; playJumpSound(); } } 
+    // ★【修正】しゃがみフラグ削除に伴い、純粋に「地面にいるとき」だけ飛べるように調整！
+    else if (gameState === 'PLAYING') { if (appKun.isGrounded) { appKun.vy = appKun.jumpForce; appKun.isGrounded = false; playJumpSound(); } } 
     else if (gameState === 'GAMEOVER') { if (gameOverTimer > 48) { document.getElementById('result-mode-select').style.display = 'none'; initGame(); gameState = 'PLAYING'; startBGM(); } }
 }
 
@@ -273,11 +272,16 @@ function syncModeSelection(mode) {
     }
 }
 
+// ★【超重要バグ完全大修復】イベントのダブル発動（clickとtouchendの重複）を防ぐ完全ガード構造！
 function toggleMuteAction(e) { 
     if(e) { e.stopPropagation(); e.preventDefault(); }
     const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); const mSwitch = document.getElementById('mute-switch');
-    if (!isMuted) { isMuted = true; if(mSwitch) mSwitch.classList.remove('sound-on'); stopAllMusic(); } 
-    else { isMuted = false; if(mSwitch) mSwitch.classList.add('sound-on'); if (gameState === 'PLAYING') { if (isInvincible && starBgm) starBgm.play().catch(e => {}); else if (bgm) bgm.play().catch(e => {}); } } 
+    if (!isMuted) { 
+        isMuted = true; if(mSwitch) mSwitch.classList.remove('sound-on'); stopAllMusic(); 
+    } else { 
+        isMuted = false; if(mSwitch) mSwitch.classList.add('sound-on'); 
+        if (gameState === 'PLAYING') { if (isInvincible && starBgm) starBgm.play().catch(e => {}); else if (bgm) bgm.play().catch(e => {}); } 
+    } 
 }
 
 // ==========================================
@@ -294,19 +298,15 @@ function gameLoop() {
 
         if (gameMode === 'FORCED') {
             scrollSpeed = 5; isMovingNow = true; distance += scrollSpeed * 0.05;
-            if (!appKun.isCrouching) {
-                if (keysPressed.ArrowRight || touchMoveDirection === 1) { appKun.x += appKun.moveSpeed; }
-                if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; }
-            }
+            if (keysPressed.ArrowRight || touchMoveDirection === 1) { appKun.x += appKun.moveSpeed; }
+            if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; }
         } else {
             scrollSpeed = 0; 
-            if (!appKun.isCrouching) {
-                if (keysPressed.ArrowRight || touchMoveDirection === 1) {
-                    appKun.x += appKun.moveSpeed; isMovingNow = true; 
-                    if (appKun.x > 350) { scrollSpeed = appKun.moveSpeed; appKun.x = 350; }
-                }
-                if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; isMovingNow = true; }
+            if (keysPressed.ArrowRight || touchMoveDirection === 1) {
+                appKun.x += appKun.moveSpeed; isMovingNow = true; 
+                if (appKun.x > 350) { scrollSpeed = appKun.moveSpeed; appKun.x = 350; }
             }
+            if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; isMovingNow = true; }
             if (!appKun.isGrounded && appKun.x >= 350 && (keysPressed.ArrowRight || touchMoveDirection === 1)) { scrollSpeed = appKun.moveSpeed; appKun.x = 350; }
             distance += scrollSpeed * 0.05;
         }
@@ -339,8 +339,8 @@ function gameLoop() {
         holes.forEach(hole => { hole.startX -= scrollSpeed; hole.endX -= scrollSpeed; });
         lastGeneratedX -= scrollSpeed; if (lastGeneratedX < 900) { generateNextTerrain(); }
 
-        if (appKun.isGrounded && keysPressed.ArrowDown) { appKun.isCrouching = true; }
-        if (appKun.isCrouching) { appKun.hitboxOffsetY = isBig ? 45 : 32; appKun.height = isBig ? 40 : 28; } else { appKun.hitboxOffsetY = 14; appKun.height = isBig ? 75 : 50; }
+        // ★【修正】プレイヤーのサイズ指定を「巨大化中か通常か」のみの2パターンに完全固定化！
+        appKun.hitboxOffsetY = 14; appKun.height = isBig ? 75 : 50;
         appKun.vy += appKun.gravity; appKun.y += appKun.vy;
 
         // 地形衝突
@@ -367,11 +367,11 @@ function gameLoop() {
         }
 
         // アニメーション制御
-        if (appKun.isGrounded && !appKun.isCrouching) {
+        if (appKun.isGrounded) {
             appKun.angle = 0;
             if (isMovingNow) { appKun.animeTimer += 5; if (appKun.animeTimer > 60) { appKun.animeFrame = appKun.animeFrame === 0 ? 1 : 0; appKun.animeTimer = 0; } } 
             else { appKun.animeFrame = 0; }
-        } else if (!appKun.isGrounded) { appKun.animeFrame = 1; appKun.angle = appKun.vy * 0.02; appKun.isCrouching = false; }
+        } else if (!appKun.isGrounded) { appKun.animeFrame = 1; appKun.angle = appKun.vy * 0.02; }
         if (appKun.landSquat > 0) { appKun.landSquat -= 0.4; }
 
         // アイテム
@@ -443,7 +443,8 @@ function gameLoop() {
         if (isBig) { drawWidth *= 1.4; drawHeight *= 1.4; drawY -= 20; }
         ctx.translate(appKun.x + drawWidth / 2, drawY + drawHeight / 2); ctx.rotate(appKun.angle);
         if (isInvincible) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${flashTimer * 10 % 360}, 100%, 60%)`; } else if (isBig) { ctx.shadowBlur = 15; ctx.shadowColor = '#ff4757'; }
-        let currentAppImage = appKun.isCrouching ? images.appKun3 : (appKun.animeFrame === 0 ? images.appKun1 : images.appKun2);
+        // ★【修正】しゃがみ画像（appKun3）の呼び出しを完全に撤廃し、appKun1とappKun2だけで綺麗にパラパラ走るように統一！
+        let currentAppImage = (appKun.animeFrame === 0 ? images.appKun1 : images.appKun2);
         ctx.drawImage(currentAppImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); ctx.restore();
     }
 
@@ -470,14 +471,15 @@ function gameLoop() {
 }
 
 // ==========================================
-// 🔌 6. イベントシステム（★大完全修復・合流完了）
+// 🔌 6. イベントシステム
 // ==========================================
 const mSwitch = document.getElementById('mute-switch'); 
 const bSoundOn = document.getElementById('btn-sound-on'); 
 const bSoundOff = document.getElementById('btn-sound-off'); 
 
-bSoundOn.addEventListener('click', (e) => { e.stopPropagation(); isMuted = false; bSoundOn.classList.add('active'); bSoundOff.classList.remove('active'); if(mSwitch) mSwitch.classList.add('sound-on'); });
-bSoundOff.addEventListener('click', (e) => { e.stopPropagation(); isMuted = true; bSoundOn.classList.remove('active'); bSoundOff.classList.add('active'); if(mSwitch) mSwitch.classList.remove('sound-on'); });
+// ★【修正】click単体に絞り、e.stopPropagation()でタッチ操作からの重複検知を完全シャットアウト！
+bSoundOn.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); isMuted = false; bSoundOn.classList.add('active'); bSoundOff.classList.remove('active'); if(mSwitch) mSwitch.classList.add('sound-on'); });
+bSoundOff.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); isMuted = true; bSoundOn.classList.remove('active'); bSoundOff.classList.add('active'); if(mSwitch) mSwitch.classList.remove('sound-on'); });
 document.getElementById('start-btn').addEventListener('click', handleGameStartAction);
 
 document.getElementById('btn-mode-normal').addEventListener('click', (e) => { e.stopPropagation(); syncModeSelection('NORMAL'); });
@@ -485,12 +487,13 @@ document.getElementById('btn-mode-forced').addEventListener('click', (e) => { e.
 document.getElementById('btn-result-normal').addEventListener('click', (e) => { e.stopPropagation(); syncModeSelection('NORMAL'); });
 document.getElementById('btn-result-forced').addEventListener('click', (e) => { e.stopPropagation(); syncModeSelection('FORCED'); });
 
-// PCキーボード
-window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); processInput(); } if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); keysPressed[e.code] = true; } if (e.code === 'ArrowDown') { e.preventDefault(); keysPressed[e.code] = true; } });
-window.addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { keysPressed[e.code] = false; } if (e.code === 'ArrowDown') { keysPressed[e.code] = false; appKun.isCrouching = false; } });
+// PCキーボード（★しゃがみに関するキー割り当てを完全削除）
+window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); processInput(); } if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); keysPressed[e.code] = true; } });
+window.addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { keysPressed[e.code] = false; } });
 
-// マルチタッチ対応イベント
+// マルチタッチイベント（★しゃがみ判定を完全抹消）
 window.addEventListener('touchstart', (e) => { 
+    // 音量スイッチを叩いた時は単発で最優先リターン
     if (e.target.closest('#mute-switch')) { toggleMuteAction(e); return; }
     if (e.target.closest('#start-screen') || e.target.closest('#result-mode-select')) return; 
     if (gameState === 'GAMEOVER') { processInput(); return; } 
@@ -503,7 +506,7 @@ window.addEventListener('touchstart', (e) => {
         if (moveTouchId === null) {
             moveTouchId = t.identifier;
         } else {
-            processInput(); // 2本指同時タップ時
+            processInput(); 
         }
     }
 }, { passive: false });
@@ -524,12 +527,10 @@ window.addEventListener('touchmove', (e) => {
             data.isTapCandidate = false;
         }
 
+        // 移動スワイプ判定のみを稼働（下スワイプしゃがみは完全削除！）
         if (t.identifier === moveTouchId) {
-            if (diffY > 30 && appKun.isGrounded) { appKun.isCrouching = true; touchMoveDirection = 0; return; } 
-            if (!appKun.isCrouching) { 
-                if (Math.abs(diffX) > 15) { isDragging = true; touchMoveDirection = diffX > 0 ? 1 : -1; } 
-                else { touchMoveDirection = 0; } 
-            }
+            if (Math.abs(diffX) > 15) { isDragging = true; touchMoveDirection = diffX > 0 ? 1 : -1; } 
+            else { touchMoveDirection = 0; } 
         }
     }
 }, { passive: false });
@@ -544,14 +545,12 @@ window.addEventListener('touchend', (e) => {
         let data = activeTouches[t.identifier];
         
         if (data && data.isTapCandidate) {
-            processInput(); // 1本指単発タップジャンプ！
+            processInput(); 
         }
         
         if (t.identifier === moveTouchId) {
-            appKun.isCrouching = false;
             touchMoveDirection = 0;
             isDragging = false;
-            swipeTriggered = false;
             moveTouchId = null; 
         }
         delete activeTouches[t.identifier];
@@ -562,7 +561,8 @@ window.addEventListener('touchend', (e) => {
         if (remainingIds.length > 0) { moveTouchId = parseInt(remainingIds[0]); }
     }
 });
-if(mSwitch) { mSwitch.addEventListener('click', toggleMuteAction); mSwitch.addEventListener('touchend', toggleMuteAction); }
+// ★音量スイッチの登録もclick単発に絞ってループを完全シャットアウト！
+if(mSwitch) { mSwitch.addEventListener('click', toggleMuteAction); }
 </script>
 </body>
 </html>
