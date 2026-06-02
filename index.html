@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
     
-    <title>スーパーアップくん - スコアアタック完全版</title>
+    <title>スーパーアップ君</title>
     <style>
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -34,8 +34,6 @@
         #result-mode-select { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: none; z-index: 100; }
         #start-btn { font-family: "DotGothic16", sans-serif; font-size: 22px; background-color: #ff4757; color: white; border: 3px solid #333; padding: 10px 35px; cursor: pointer; box-shadow: 0 4px 0 #333; border-radius: 6px; }
         #start-btn:active { transform: translateY(4px); box-shadow: none; }
-        
-        /* ★【修復の核心】縦画面時にすり抜けてしまっていたCSSのタイポをflex-directionに修正！！ */
         #orientation-warning { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #2f3542; color: white; z-index: 999; flex-direction: column; justify-content: center; align-items: center; font-size: 20px; text-align: center; padding: 20px; box-sizing: border-box; }
         .warning-icon { font-size: 50px; margin-bottom: 20px; }
     </style>
@@ -53,7 +51,7 @@
         <div id="mute-switch"></div>
 
         <div id="start-screen">
-            <div class="start-title">スーパーアップくん</div>
+            <div class="start-title">スーパーアップ君</div>
             <div class="start-subtitle">〜無限有酸素編〜</div>
             
             <div class="select-container">
@@ -116,8 +114,10 @@ let isBig = false;
 let shrinkFlashTimer = 0; 
 
 const keysPressed = { ArrowLeft: false, ArrowRight: false, ArrowDown: false };
-let touchStartX = 0; let touchStartY = 0; 
-let isDragging = false; let swipeTriggered = false; 
+
+// ★【大改修】マルチタッチ監視用の最新変数群
+let activeTouches = {}; // 画面に触れている指をすべてID管理
+let moveTouchId = null;  // スワイプ移動を担当している指のID
 let touchMoveDirection = 0; 
 
 let cameraX = 0;
@@ -140,7 +140,7 @@ let staticObstacles = [];
 let holes = [];
 
 // ==========================================
-// 🔄 レスポンシブ・画面回転ロック管理
+// 🔄 レスポンシブ管理
 // ==========================================
 function resizeGame() {
     const wrapper = document.getElementById('game-wrapper'); 
@@ -148,54 +148,33 @@ function resizeGame() {
     const windowWidth = window.innerWidth; 
     const windowHeight = window.innerHeight;
     
-    // 縦長画面の時は完全に警告画面でゲームを覆い隠す
     if (windowWidth < windowHeight && windowWidth < 768) { 
-        warning.style.display = 'flex'; 
-        wrapper.style.display = 'none'; 
-        return; 
+        warning.style.display = 'flex'; wrapper.style.display = 'none'; return; 
     } else { 
-        warning.style.display = 'none'; 
-        wrapper.style.display = 'block'; 
+        warning.style.display = 'none'; wrapper.style.display = 'block'; 
     }
     const baseWidth = 800; const baseHeight = 340; const scaleX = windowWidth / baseWidth; const scaleY = windowHeight / baseHeight;
     const scale = Math.min(scaleX, scaleY, 1.5); wrapper.style.transform = `scale(${scale})`;
 }
-window.addEventListener('resize', resizeGame); 
-window.addEventListener('orientationchange', resizeGame); 
-window.addEventListener('DOMContentLoaded', resizeGame);
+window.addEventListener('resize', resizeGame); window.addEventListener('orientationchange', resizeGame); window.addEventListener('DOMContentLoaded', resizeGame);
 
 // ==========================================
 // 🎨 2. 画像アセットロード管理
 // ==========================================
 const images = {};
 const imgSources = {
-    appKun1: 'images/appkun1.png', 
-    appKun2: 'images/appkun2.png', 
-    appKun3: 'images/appkun3.png', 
-    bg: 'images/bg_park.png', 
-    dumbbell: 'images/dumbbell.png', 
-    barbel: 'images/barbel.png', 
-    shaker: 'images/shaker.png',        
-    evilAppKun: 'images/evil_appkun.png', 
-    kettlebell: 'images/kettlebell.png',  
-    brick: 'images/block_normal.png',     
-    blockSpecial: 'images/block_special.png', 
-    blockDone: 'images/block_done.png',    
-    meat: 'images/meat.png',               
-    proteinJar: 'images/protein_jar.png'  
+    appKun1: 'images/appkun1.png', appKun2: 'images/appkun2.png', appKun3: 'images/appkun3.png', 
+    bg: 'images/bg_park.png', dumbbell: 'images/dumbbell.png', barbel: 'images/barbel.png', 
+    shaker: 'images/shaker.png', evilAppKun: 'images/evil_appkun.png', kettlebell: 'images/kettlebell.png',  
+    brick: 'images/block_normal.png', blockSpecial: 'images/block_special.png', blockDone: 'images/block_done.png',    
+    meat: 'images/meat.png', proteinJar: 'images/protein_jar.png'  
 };
 
 let loadedImages = 0;
 const totalImages = Object.keys(imgSources).length;
 for (let key in imgSources) {
-    images[key] = new Image(); 
-    images[key].src = imgSources[key];
-    images[key].onload = () => { 
-        loadedImages++; 
-        if (loadedImages === totalImages) { 
-            if (gameState === 'START') drawStartScreenPlaceholder();
-        } 
-    };
+    images[key] = new Image(); images[key].src = imgSources[key];
+    images[key].onload = () => { loadedImages++; if (loadedImages === totalImages) { if (gameState === 'START') drawStartScreenPlaceholder(); } };
 }
 
 // ==========================================
@@ -206,21 +185,12 @@ function playJumpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (
 function playCoinSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; const now = audioCtx.currentTime; osc.frequency.setValueAtTime(987, now); osc.frequency.exponentialRampToValueAtTime(1318, now + 0.08); gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.25); } catch(e) {} } }
 function playPowerUpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [330, 392, 659, 523, 587, 784].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
 function playShrinkSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [784, 587, 523, 392].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
-function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.06); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
+function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
 function playGameOverSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 494, d: 0.08 }, { f: 440, d: 0.08 }, { f: 392, d: 0.12 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 311, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.4, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 function playNewRecordSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 659, d: 0.08 }, { f: 784, d: 0.08 }, { f: 1046,d: 0.16 }, { f: 0, d: 0.04 }, { f: 880, d: 0.12 }, { f: 987, d: 0.12 }, { f: 1046,d: 0.24 }, { f: 466, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.35, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 
-function stopAllMusic() {
-    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm');
-    if (bgm) bgm.pause(); if (starBgm) starBgm.pause();
-}
-
-function startBGM() {
-    stopAllMusic(); if (isMuted) return;
-    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm');
-    if (isInvincible && starBgm) { starBgm.currentTime = 0; starBgm.play().catch(e => {}); } 
-    else if (bgm) { bgm.currentTime = 0; bgm.play().catch(e => {}); }
-}
+function stopAllMusic() { const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); if (bgm) bgm.pause(); if (starBgm) starBgm.pause(); }
+function startBGM() { stopAllMusic(); if (isMuted) return; const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); if (isInvincible && starBgm) { starBgm.currentTime = 0; starBgm.play().catch(e => {}); } else if (bgm) { bgm.currentTime = 0; bgm.play().catch(e => {}); } }
 
 // ==========================================
 // ⚙️ 4. コア物理・ロジック関数群
@@ -235,8 +205,7 @@ function generateNextTerrain() {
         staticObstacles.push({ x: startX + 30, y: 130, width: 30, height: 40, name: 'proteinJar', type: 'item', vy: 0 }); 
         lastGeneratedX = startX + 150;
     } else if (type === 1) { 
-        let blockType = 'brick'; 
-        if (distance > 0 && Math.floor(distance) % 200 <= 25 && Math.random() < 0.50) { blockType = 'blockSpecial'; }
+        let blockType = 'brick'; if (distance > 0 && Math.floor(distance) % 200 <= 25 && Math.random() < 0.50) { blockType = 'blockSpecial'; }
         staticObstacles.push({ x: startX, y: 140, width: 30, height: 30, name: blockType, type: 'platform' });
         staticObstacles.push({ x: startX + 35, y: 140, width: 30, height: 30, name: 'brick', type: 'platform' });
         lastGeneratedX = startX + 160;
@@ -263,55 +232,32 @@ function generateNextTerrain() {
 }
 
 function initGame() {
-    distance = 0; cameraX = 0; supplementCount = 0; meatRotation = 0; capsuleRotation = 0; currentSpeed = 5; currentScore = 0;
-    enemyBonusScore = 0; 
-    nextStarDistance = 300; 
+    distance = 0; cameraX = 0; supplementCount = 0; meatRotation = 0; capsuleRotation = 0; currentSpeed = 5; currentScore = 0; enemyBonusScore = 0; nextStarDistance = 300; 
     isInvincible = false; invincibilityTimer = 0; flashTimer = 0; isBig = false; shrinkFlashTimer = 0;
     appKun.x = 80; appKun.y = appKun.baseY; appKun.vy = 0; appKun.isGrounded = true; appKun.isCrouching = false; 
     appKun.animeFrame = 0; appKun.animeTimer = 0; appKun.landSquat = 0; appKun.angle = 0; gameOverTimer = 0;
     keysPressed.ArrowLeft = false; keysPressed.ArrowRight = false; keysPressed.ArrowDown = false;
-    touchMoveDirection = 0; // タッチ移動初期化
-    
+    touchMoveDirection = 0; activeTouches = {}; moveTouchId = null;
     staticObstacles = []; holes = []; lastGeneratedX = 400;
     for(let i=0; i<6; i++) { generateNextTerrain(); }
 }
 
 function handleGameStartAction() {
-    if (gameState !== 'START') return;
-    document.getElementById('start-screen').style.display = 'none'; 
-    document.getElementById('mute-switch').style.display = 'flex';
-    initGame(); 
-    gameState = 'PLAYING'; 
-    startBGM();
-    requestAnimationFrame(gameLoop); 
+    if (gameState !== 'START') return; document.getElementById('start-screen').style.display = 'none'; document.getElementById('mute-switch').style.display = 'flex';
+    initGame(); gameState = 'PLAYING'; startBGM(); requestAnimationFrame(gameLoop); 
 }
-
 function triggerGameOver() {
-    gameState = 'GAMEOVER'; stopAllMusic();
-    document.getElementById('result-mode-select').style.display = 'flex';
-    if (currentScore > highScore) { highScore = currentScore; isNewRecord = true; playNewRecordSound(); } 
-    else { isNewRecord = false; playGameOverSound(); }
+    gameState = 'GAMEOVER'; stopAllMusic(); document.getElementById('result-mode-select').style.display = 'flex';
+    if (currentScore > highScore) { highScore = currentScore; isNewRecord = true; playNewRecordSound(); } else { isNewRecord = false; playGameOverSound(); }
 }
-
-function checkCollision(player, rect2) {
-    const pEx = player.x + player.hitboxOffsetX; const pEy = player.y + player.hitboxOffsetY;
-    return pEx < rect2.x + rect2.width && pEx + player.width > rect2.x && pEy < rect2.y + rect2.height && pEy + player.height > rect2.y;
-}
-
-function drawStartScreenPlaceholder() {
-    ctx.clearRect(0, 0, 800, 300);
-    if(images.bg && images.bg.complete) ctx.drawImage(images.bg, 0, 0, 800, 270);
-    ctx.fillStyle = '#1e8449'; ctx.fillRect(0, 270, 800, 30);
-    if(images.appKun1 && images.appKun1.complete) ctx.drawImage(images.appKun1, 80, 186, 64, 64);
-}
+function checkCollision(player, rect2) { const pEx = player.x + player.hitboxOffsetX; const pEy = player.y + player.hitboxOffsetY; return pEx < rect2.x + rect2.width && pEx + player.width > rect2.x && pEy < rect2.y + rect2.height && pEy + player.height > rect2.y; }
+function drawStartScreenPlaceholder() { ctx.clearRect(0, 0, 800, 300); if(images.bg && images.bg.complete) ctx.drawImage(images.bg, 0, 0, 800, 270); ctx.fillStyle = '#1e8449'; ctx.fillRect(0, 270, 800, 30); if(images.appKun1 && images.appKun1.complete) ctx.drawImage(images.appKun1, 80, 186, 64, 64); }
 
 function processInput() {
     if (inputLocked) return; inputLocked = true; setTimeout(() => { inputLocked = false; }, 100);
     if (gameState === 'START') { handleGameStartAction(); } 
     else if (gameState === 'PLAYING') { if (appKun.isGrounded && !appKun.isCrouching) { appKun.vy = appKun.jumpForce; appKun.isGrounded = false; playJumpSound(); } } 
-    else if (gameState === 'GAMEOVER') { 
-        if (gameOverTimer > 48) { document.getElementById('result-mode-select').style.display = 'none'; initGame(); gameState = 'PLAYING'; startBGM(); } 
-    }
+    else if (gameState === 'GAMEOVER') { if (gameOverTimer > 48) { document.getElementById('result-mode-select').style.display = 'none'; initGame(); gameState = 'PLAYING'; startBGM(); } }
 }
 
 function syncModeSelection(mode) {
@@ -325,6 +271,14 @@ function syncModeSelection(mode) {
     }
 }
 
+// ★独立音量調整（タッチブロックに絶対に巻き込まれない構造にリペア）
+function toggleMuteAction(e) { 
+    if(e) { e.stopPropagation(); e.preventDefault(); }
+    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); const mSwitch = document.getElementById('mute-switch');
+    if (!isMuted) { isMuted = true; if(mSwitch) mSwitch.classList.remove('sound-on'); stopAllMusic(); } 
+    else { isMuted = false; if(mSwitch) mSwitch.classList.add('sound-on'); if (gameState === 'PLAYING') { if (isInvincible && starBgm) starBgm.play().catch(e => {}); else if (bgm) bgm.play().catch(e => {}); } } 
+}
+
 // ==========================================
 // 🕹️ 5. メインゲームループ
 // ==========================================
@@ -333,21 +287,13 @@ function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (gameState === 'PLAYING') {
-        let scrollSpeed = 0;
-        let isMovingNow = false; 
-        meatRotation += 0.04;
-        capsuleRotation += 0.05; 
-
+        let scrollSpeed = 0; let isMovingNow = false; meatRotation += 0.04; capsuleRotation += 0.05; 
         if (isInvincible) { invincibilityTimer--; flashTimer++; if (invincibilityTimer <= 0) { isInvincible = false; startBGM(); } }
         if (shrinkFlashTimer > 0) { shrinkFlashTimer--; }
 
-        // ★【大改修】空中制御をPCキーボード＆スマホドラッグの両方で完全統合
+        // モード別空中制御ロジック
         if (gameMode === 'FORCED') {
-            scrollSpeed = 5; 
-            isMovingNow = true; 
-            distance += scrollSpeed * 0.05;
-            
-            // 地上でも空中でも入力を常に受け付ける
+            scrollSpeed = 5; isMovingNow = true; distance += scrollSpeed * 0.05;
             if (!appKun.isCrouching) {
                 if (keysPressed.ArrowRight || touchMoveDirection === 1) { appKun.x += appKun.moveSpeed; }
                 if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; }
@@ -356,61 +302,34 @@ function gameLoop() {
             scrollSpeed = 0; 
             if (!appKun.isCrouching) {
                 if (keysPressed.ArrowRight || touchMoveDirection === 1) {
-                    appKun.x += appKun.moveSpeed;
-                    isMovingNow = true; 
-                    if (appKun.x > 350) { 
-                        scrollSpeed = appKun.moveSpeed;
-                        appKun.x = 350;
-                    }
+                    appKun.x += appKun.moveSpeed; isMovingNow = true; 
+                    if (appKun.x > 350) { scrollSpeed = appKun.moveSpeed; appKun.x = 350; }
                 }
-                if (keysPressed.ArrowLeft || touchMoveDirection === -1) { 
-                    appKun.x -= appKun.moveSpeed;
-                    isMovingNow = true; 
-                }
+                if (keysPressed.ArrowLeft || touchMoveDirection === -1) { appKun.x -= appKun.moveSpeed; isMovingNow = true; }
             }
-            // 空中での慣性移動を再現（ジャンプ中も世界をスクロールさせる）
-            if (!appKun.isGrounded && appKun.x >= 350 && (keysPressed.ArrowRight || touchMoveDirection === 1)) {
-                scrollSpeed = appKun.moveSpeed;
-                appKun.x = 350;
-            }
+            if (!appKun.isGrounded && appKun.x >= 350 && (keysPressed.ArrowRight || touchMoveDirection === 1)) { scrollSpeed = appKun.moveSpeed; appKun.x = 350; }
             distance += scrollSpeed * 0.05;
         }
 
         currentScore = Math.floor(distance) * 1000 + (supplementCount * 100) + enemyBonusScore;
-
         if (appKun.x < 0) appKun.x = 0; if (appKun.x > 736) appKun.x = 736;
-
         bgOffset = (bgOffset - scrollSpeed * 0.5) % 800;
 
-        // スターカプセルの300mごとの自動出現判定
         if (distance >= nextStarDistance) {
-            staticObstacles.push({
-                x: 850, baseY: 70 + Math.random() * 60, y: 100, width: 20, height: 32,
-                name: 'starCapsule', type: 'item', vx: -3, waveCounter: 0
-            });
+            staticObstacles.push({ x: 850, baseY: 70 + Math.random() * 60, y: 100, width: 20, height: 32, name: 'starCapsule', type: 'item', vx: -3, waveCounter: 0 });
             nextStarDistance += 300; 
         }
 
         let newDroppedKettlebells = [];
         staticObstacles.forEach(obs => {
             obs.x -= scrollSpeed; 
-
-            if (obs.name === 'starCapsule') {
-                if (obs.vx) obs.x += obs.vx; 
-                obs.waveCounter += 0.05;
-                obs.y = obs.baseY + Math.sin(obs.waveCounter) * 25; 
-            }
-
+            if (obs.name === 'starCapsule') { if (obs.vx) obs.x += obs.vx; obs.waveCounter += 0.05; obs.y = obs.baseY + Math.sin(obs.waveCounter) * 25; }
             if (obs.type === 'enemy') {
                 if (obs.vx !== 0 && obs.name !== 'starCapsule') { obs.x += obs.vx; obs.counter += Math.abs(obs.vx); if (obs.counter >= obs.range) { obs.vx *= -1; obs.counter = 0; } }
                 if (obs.vy !== 0) { obs.y -= obs.vy; obs.counter += Math.abs(obs.vy); if (obs.counter >= obs.range) { obs.vy *= -1; obs.counter = 0; } }
-                
                 if (obs.name === 'evilAppKun') {
                     obs.dropTimer++;
-                    if (obs.dropTimer > 90) {
-                        newDroppedKettlebells.push({ x: obs.x + 20, y: obs.y + 90, width: 35, height: 35, name: 'kettlebell', type: 'enemy_projectile', vy: 4 });
-                        obs.dropTimer = 0;
-                    }
+                    if (obs.dropTimer > 90) { newDroppedKettlebells.push({ x: obs.x + 20, y: obs.y + 90, width: 35, height: 35, name: 'kettlebell', type: 'enemy_projectile', vy: 4 }); obs.dropTimer = 0; }
                 }
             }
             if (obs.type === 'enemy_projectile' || obs.type === 'item') { if(obs.name !== 'starCapsule') obs.y += obs.vy; }
@@ -418,33 +337,23 @@ function gameLoop() {
         if (newDroppedKettlebells.length > 0) { staticObstacles = staticObstacles.concat(newDroppedKettlebells); }
 
         holes.forEach(hole => { hole.startX -= scrollSpeed; hole.endX -= scrollSpeed; });
-
         lastGeneratedX -= scrollSpeed; if (lastGeneratedX < 900) { generateNextTerrain(); }
 
         if (appKun.isGrounded && keysPressed.ArrowDown) { appKun.isCrouching = true; }
-        if (appKun.isCrouching) { appKun.hitboxOffsetY = isBig ? 45 : 32; appKun.height = isBig ? 40 : 28; } 
-        else { appKun.hitboxOffsetY = 14; appKun.height = isBig ? 75 : 50; }
-
+        if (appKun.isCrouching) { appKun.hitboxOffsetY = isBig ? 45 : 32; appKun.height = isBig ? 40 : 28; } else { appKun.hitboxOffsetY = 14; appKun.height = isBig ? 75 : 50; }
         appKun.vy += appKun.gravity; appKun.y += appKun.vy;
 
-        // 地形・足場判定
-        let onPlatform = false;
-        const pEx = appKun.x + appKun.hitboxOffsetX; const pEy = appKun.y + appKun.hitboxOffsetY;
-
+        // 地形衝突
+        let onPlatform = false; const pEx = appKun.x + appKun.hitboxOffsetX; const pEy = appKun.y + appKun.hitboxOffsetY;
         for (let i = staticObstacles.length - 1; i >= 0; i--) {
             let obs = staticObstacles[i];
             if (obs.type === 'platform') {
                 if (pEx + appKun.width > obs.x && pEx < obs.x + obs.width) {
-                    if (appKun.vy >= 0 && pEy + appKun.height >= obs.y && pEy + appKun.height <= obs.y + 14) {
-                        appKun.y = obs.y - appKun.height - appKun.hitboxOffsetY; appKun.vy = 0; appKun.isGrounded = true; onPlatform = true;
-                    } else if (appKun.vy < 0 && pEy >= obs.y + obs.height - 14 && pEy <= obs.y + obs.height) {
+                    if (appKun.vy >= 0 && pEy + appKun.height >= obs.y && pEy + appKun.height <= obs.y + 14) { appKun.y = obs.y - appKun.height - appKun.hitboxOffsetY; appKun.vy = 0; appKun.isGrounded = true; onPlatform = true; } 
+                    else if (appKun.vy < 0 && pEy >= obs.y + obs.height - 14 && pEy <= obs.y + obs.height) {
                         appKun.y = obs.y + obs.height - appKun.hitboxOffsetY; appKun.vy = 1.5; 
-                        if (obs.name === 'blockSpecial') {
-                            obs.name = 'blockDone'; playCoinSound();
-                            staticObstacles.push({ x: obs.x, y: obs.y - 32, width: 32, height: 32, name: 'meat', type: 'item', vy: 0 });
-                        } else if (obs.name === 'brick' && (isBig || isInvincible)) {
-                            playCoinSound(); staticObstacles.splice(i, 1);
-                        }
+                        if (obs.name === 'blockSpecial') { obs.name = 'blockDone'; playCoinSound(); staticObstacles.push({ x: obs.x, y: obs.y - 32, width: 32, height: 32, name: 'meat', type: 'item', vy: 0 }); } 
+                        else if (obs.name === 'brick' && (isBig || isInvincible)) { playCoinSound(); staticObstacles.splice(i, 1); }
                     }
                 }
             }
@@ -457,16 +366,12 @@ function gameLoop() {
             else { appKun.isGrounded = false; }
         }
 
-        // アニメーションコマ送り
+        // アニメーション制御
         if (appKun.isGrounded && !appKun.isCrouching) {
             appKun.angle = 0;
-            if (isMovingNow) {
-                appKun.animeTimer += 5; 
-                if (appKun.animeTimer > 60) { appKun.animeFrame = appKun.animeFrame === 0 ? 1 : 0; appKun.animeTimer = 0; }
-            } else { appKun.animeFrame = 0; }
-        } else if (!appKun.isGrounded) { 
-            appKun.animeFrame = 1; appKun.angle = appKun.vy * 0.02; appKun.isCrouching = false; 
-        }
+            if (isMovingNow) { appKun.animeTimer += 5; if (appKun.animeFrame === 0 && appKun.animeTimer > 60) { appKun.animeFrame = 1; appKun.animeTimer = 0; } else if (appKun.animeFrame === 1 && appKun.animeTimer > 60) { appKun.animeFrame = 0; appKun.animeTimer = 0; } } 
+            else { appKun.animeFrame = 0; }
+        } else if (!appKun.isGrounded) { appKun.animeFrame = 1; appKun.angle = appKun.vy * 0.02; appKun.isCrouching = false; }
         if (appKun.landSquat > 0) { appKun.landSquat -= 0.4; }
 
         // アイテム
@@ -477,27 +382,20 @@ function gameLoop() {
                 else if (obs.name === 'proteinJar') { supplementCount++; playCoinSound(); } 
                 else if (obs.name === 'starCapsule') {
                     isInvincible = true; invincibilityTimer = 600; flashTimer = 0; playStarSound();
-                    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm');
-                    if (bgm && starBgm && !isMuted) { bgm.pause(); starBgm.currentTime = 0; starBgm.play().catch(e=>{}); }
+                    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); if (bgm && starBgm && !isMuted) { bgm.pause(); starBgm.currentTime = 0; starBgm.play().catch(e=>{}); }
                 }
                 staticObstacles.splice(i, 1);
             }
         }
 
-        // 被弾・撃破
+        // 撃破・被弾
         for (let i = staticObstacles.length - 1; i >= 0; i--) {
             let obs = staticObstacles[i];
             if (obs.type !== 'platform' && obs.type !== 'item') {
                 if (checkCollision(appKun, obs)) {
-                    if (appKun.vy > 0 && obs.name === 'rack-barbel' && isBig && (appKun.y + appKun.hitboxOffsetY + appKun.height) <= obs.y + 25) {
-                        playCoinSound(); staticObstacles.splice(i, 1); appKun.vy = -6; enemyBonusScore += 500; continue;
-                    }
-                    if (appKun.vy > 0 && (obs.name === 'dumbbell' || obs.name === 'shaker') && (appKun.y + appKun.hitboxOffsetY + appKun.height) <= obs.y + 20) {
-                        playCoinSound(); staticObstacles.splice(i, 1); appKun.vy = -8.5; enemyBonusScore += 200; continue;
-                    }
-                    if (isInvincible && obs.name === 'evilAppKun') {
-                        playCoinSound(); staticObstacles.splice(i, 1); enemyBonusScore += 1000; continue;
-                    }
+                    if (appKun.vy > 0 && obs.name === 'rack-barbel' && isBig && (appKun.y + appKun.hitboxOffsetY + appKun.height) <= obs.y + 25) { playCoinSound(); staticObstacles.splice(i, 1); appKun.vy = -6; enemyBonusScore += 500; continue; }
+                    if (appKun.vy > 0 && (obs.name === 'dumbbell' || obs.name === 'shaker') && (appKun.y + appKun.hitboxOffsetY + appKun.height) <= obs.y + 20) { playCoinSound(); staticObstacles.splice(i, 1); appKun.vy = -8.5; enemyBonusScore += 200; continue; }
+                    if (isInvincible && obs.name === 'evilAppKun') { playCoinSound(); staticObstacles.splice(i, 1); enemyBonusScore += 1000; continue; }
                     if (isInvincible) { staticObstacles.splice(i, 1); playCoinSound(); } 
                     else if (shrinkFlashTimer > 0) { continue; } 
                     else if (isBig) { isBig = false; shrinkFlashTimer = 90; playShrinkSound(); staticObstacles.splice(i, 1); } 
@@ -507,9 +405,8 @@ function gameLoop() {
         }
     }
 
-    // 🎨 レンダリング背景
+    // 背景・描画
     if (images.bg && images.bg.complete) { ctx.drawImage(images.bg, bgOffset, 0, 800, 270); ctx.drawImage(images.bg, bgOffset + 800, 0, 800, 270); }
-
     let currentFloorX = 0;
     while (currentFloorX < 800) {
         let isHoleZone = false; for (let hole of holes) { if (currentFloorX >= hole.startX && currentFloorX <= hole.endX) { isHoleZone = true; } }
@@ -545,8 +442,7 @@ function gameLoop() {
         ctx.save(); let drawWidth = appKun.imgWidth; let drawHeight = appKun.imgHeight; let drawY = appKun.y + appKun.landSquat;
         if (isBig) { drawWidth *= 1.4; drawHeight *= 1.4; drawY -= 20; }
         ctx.translate(appKun.x + drawWidth / 2, drawY + drawHeight / 2); ctx.rotate(appKun.angle);
-        if (isInvincible) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${flashTimer * 10 % 360}, 100%, 60%)`; }
-        else if (isBig) { ctx.shadowBlur = 15; ctx.shadowColor = '#ff4757'; }
+        if (isInvincible) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${flashTimer * 10 % 360}, 100%, 60%)`; } else if (isBig) { ctx.shadowBlur = 15; ctx.shadowColor = '#ff4757'; }
         let currentAppImage = appKun.isCrouching ? images.appKun3 : (appKun.animeFrame === 0 ? images.appKun1 : images.appKun2);
         ctx.drawImage(currentAppImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); ctx.restore();
     }
@@ -554,10 +450,7 @@ function gameLoop() {
     // UI
     if (gameState === 'PLAYING') {
         if (images.proteinJar && images.proteinJar.complete) { ctx.drawImage(images.proteinJar, 20, 20, 22, 30); }
-        ctx.fillStyle = '#2f3542'; ctx.font = 'bold 20px "DotGothic16"'; ctx.textAlign = 'left';
-        ctx.fillText(` ✕ ${supplementCount}`, 45, 42);
-        ctx.fillText(`SCORE: ${currentScore.toLocaleString()}点`, 160, 42);
-
+        ctx.fillStyle = '#2f3542'; ctx.font = 'bold 20px "DotGothic16"'; ctx.textAlign = 'left'; ctx.fillText(` ✕ ${supplementCount}`, 45, 42); ctx.fillText(`SCORE: ${currentScore.toLocaleString()}点`, 160, 42);
         if (isInvincible) { ctx.fillStyle = '#eccc68'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`🌟スター無敵: ${Math.ceil(invincibilityTimer / 60)}秒`, 20, 80); } 
         else if (isBig) { ctx.fillStyle = '#ff4757'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`🍖スーパーマッスル(ブロック破壊OK)`, 20, 80); }
     }
@@ -577,7 +470,7 @@ function gameLoop() {
 }
 
 // ==========================================
-// 🔌 6. 各種イベント登録（★スマホの慣性ジャンプ物理）
+// 🔌 6. イベントシステム（★マルチタッチ＆音量完全修復）
 // ==========================================
 const mSwitch = document.getElementById('mute-switch'); 
 const bSoundOn = document.getElementById('btn-sound-on'); 
@@ -592,39 +485,57 @@ document.getElementById('btn-mode-forced').addEventListener('click', (e) => { e.
 document.getElementById('btn-result-normal').addEventListener('click', (e) => { e.stopPropagation(); syncModeSelection('NORMAL'); });
 document.getElementById('btn-result-forced').addEventListener('click', (e) => { e.stopPropagation(); syncModeSelection('FORCED'); });
 
+// PCキーボード
 window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); processInput(); } if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); keysPressed[e.code] = true; } if (e.code === 'ArrowDown') { e.preventDefault(); keysPressed[e.code] = true; } });
 window.addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { keysPressed[e.code] = false; } if (e.code === 'ArrowDown') { keysPressed[e.code] = false; appKun.isCrouching = false; } });
 
-// ★スマホタッチイベント大改造（移動ベクトルリセットの撤廃 ＆ 空中ドラッグ制御の完全解放）
+// 🔥【超絶リライト】2指同時操作マルチタッチ・アルゴリズム
 window.addEventListener('touchstart', (e) => { 
-    if (e.target.closest('#mute-switch') || e.target.closest('#start-screen') || e.target.closest('#result-mode-select')) return; 
+    // 右上の音量ボタンを触ったときは100%最優先で即時反応して処理を抜ける（バグ完全根絶）
+    if (e.target.closest('#mute-switch')) { toggleMuteAction(e); return; }
+    if (e.target.closest('#start-screen') || e.target.closest('#result-mode-select')) return; 
     if (gameState === 'GAMEOVER') { processInput(); return; } 
-    if (gameState !== 'START' && e.cancelable) e.preventDefault(); 
-    
-    const touch = e.touches[0]; 
-    touchStartX = touch.clientX; 
-    touchStartY = touch.clientY; 
-    isDragging = false; 
-    swipeTriggered = false; 
-    // ★【修正】タップした瞬間、以前の touchMoveDirection を絶対にゼロリセットせず維持（慣性を残す！）
+    if (e.cancelable) e.preventDefault();
+
+    // 画面に新しく触れたすべての指の座標をIDごとに登録
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        activeTouches[t.identifier] = { startX: t.clientX, startY: t.clientY, lastX: t.clientX };
+        
+        // もしまだ移動用の指が決まっていないなら、この指を移動用にバインドする
+        if (moveTouchId === null) {
+            moveTouchId = t.identifier;
+        } else {
+            // ★【核心！】すでに1本目の指で走っている最中に、2本目の指が画面を叩いたらジャンプを即トリガー！！
+            processInput();
+        }
+    }
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => { 
-    if (e.target.closest('#mute-switch') || e.target.closest('#result-mode-select')) { touchMoveDirection = 0; return; } 
     if (gameState !== 'PLAYING') return; 
     if (e.cancelable) e.preventDefault(); 
     
-    const touch = e.touches[0]; 
-    const diffX = touch.clientX - touchStartX; 
-    const diffY = touch.clientY - touchStartY; 
-    
-    if (diffY > 30 && appKun.isGrounded) { appKun.isCrouching = true; swipeTriggered = true; touchMoveDirection = 0; return; } 
-    
-    if (!appKun.isCrouching) { 
-        // ★【修正】地上であっても空中であっても、指のスワイプ量を常にリアルタイムに移動判定に反映！
-        if (Math.abs(diffX) > 15) { isDragging = true; touchMoveDirection = diffX > 0 ? 1 : -1; } 
-        else { touchMoveDirection = 0; } 
-    } 
+    // 画面上で動いている指をすべてスキャン
+    for (let i = 0; i < e.touches.length; i++) {
+        let t = e.touches[i];
+        let data = activeTouches[t.identifier];
+        if (!data) continue;
+        
+        // 移動担当の指の動きを解析
+        if (t.identifier === moveTouchId) {
+            const diffX = t.clientX - data.startX; 
+            const diffY = t.clientY - data.startY; 
+            
+            if (diffY > 30 && appKun.isGrounded) { appKun.isCrouching = true; touchMoveDirection = 0; return; } 
+            
+            if (!appKun.isCrouching) { 
+                // 地上でも空中でも、指の左右スワイプをダイレクトに移動方向に代入！
+                if (Math.abs(diffX) > 15) { touchMoveDirection = diffX > 0 ? 1 : -1; } 
+                else { touchMoveDirection = 0; } 
+            }
+        }
+    }
 }, { passive: false });
 
 window.addEventListener('touchend', (e) => { 
@@ -632,15 +543,27 @@ window.addEventListener('touchend', (e) => {
     if (gameState === 'START') return; 
     if (e.cancelable) e.preventDefault(); 
     
-    if (appKun.isCrouching) { appKun.isCrouching = false; } 
-    else if (!isDragging && !swipeTriggered) { 
-        // ドラッグ（スワイプ）していないピュアなポンッと叩くタップの時だけジャンプを発動！
-        processInput(); 
-    } 
-    // 指を離した瞬間に、スワイプ移動入力をリセット
-    isDragging = false; swipeTriggered = false; touchMoveDirection = 0; 
+    // 画面から離れた指を追跡
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        let t = e.changedTouches[i];
+        
+        // 離れた指が「スワイプ移動を担当していた指」だった場合、移動をストップ
+        if (t.identifier === moveTouchId) {
+            appKun.isCrouching = false;
+            touchMoveDirection = 0;
+            moveTouchId = null; // 移動担当をリセット
+        }
+        delete activeTouches[t.identifier];
+    }
+    
+    // 移動担当が空席になった場合、まだ画面に残っている別の指があればそっちに権利を移す
+    if (moveTouchId === null) {
+        let remainingIds = Object.keys(activeTouches);
+        if (remainingIds.length > 0) {
+            moveTouchId = parseInt(remainingIds[0]);
+        }
+    }
 });
-if(mSwitch) { mSwitch.addEventListener('click', toggleMuteAction); mSwitch.addEventListener('touchend', toggleMuteAction); }
 </script>
 </body>
 </html>
