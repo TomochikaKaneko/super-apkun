@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
     
-    <title>アップ君の筋トレラン - スコアアタック完全版</title>
+    <title>スーパーアップ君</title>
     <style>
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
@@ -23,7 +23,7 @@
         #mute-switch::after { content: '🔇'; font-size: 24px; }
         #mute-switch.sound-on::after { content: '🔊'; }
         
-        #start-screen { position: absolute; top: 4px; left: 4px; width: 792px; height: 292px; background-color: #7ed6df; z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; }
+        #start-screen { position: absolute; top: 4px; left: 4px; width: 800px; height: 300px; background-color: #7ed6df; z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: center; box-sizing: border-box; }
         .start-title { font-size: 32px; color: #2f3542; margin-bottom: 5px; font-weight: bold; }
         .start-subtitle { font-size: 15px; color: #57606f; margin-bottom: 12px; }
         
@@ -51,8 +51,8 @@
         <div id="mute-switch"></div>
 
         <div id="start-screen">
-            <div class="start-title">アップ君の筋トレラン</div>
-            <div class="start-subtitle">〜狙えハイスコア（スターカプセル無敵版）〜</div>
+            <div class="start-title">スーパーアップくん</div>
+            <div class="start-subtitle">〜無限有酸素編〜</div>
             
             <div class="select-container">
                 <button id="btn-sound-off" class="select-btn active">🔇 音なし</button>
@@ -60,8 +60,8 @@
             </div>
 
             <div class="select-container">
-                <button id="btn-mode-normal" class="select-btn active">🕹️ じっくりマイペース</button>
-                <button id="btn-mode-forced" class="select-btn">⚡ 強制スピード移動(速さ5固定)</button>
+                <button id="btn-mode-normal" class="select-btn active">🕹️ じっくり</button>
+                <button id="btn-mode-forced" class="select-btn">⚡ ノンストップ</button>
             </div>
 
             <button id="start-btn">GAME START</button>
@@ -69,7 +69,7 @@
 
         <div id="result-mode-select" class="select-container">
             <button id="btn-result-normal" class="select-btn active">🕹️ じっくり</button>
-            <button id="btn-result-forced" class="select-btn">⚡ 強制高速</button>
+            <button id="btn-result-forced" class="select-btn">⚡ ノンストップ</button>
         </div>
 
         <canvas id="gameCanvas" width="800" height="300"></canvas>
