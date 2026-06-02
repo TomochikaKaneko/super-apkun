@@ -244,6 +244,9 @@ function initGame() {
 
 function handleGameStartAction() {
     if (gameState !== 'START') return; document.getElementById('start-screen').style.display = 'none'; document.getElementById('mute-switch').style.display = 'flex';
+    // ★追加：BGMを先読みさせて準備完了させる！
+    document.getElementById('bgm').load();
+    document.getElementById('star_bgm').load();
     initGame(); gameState = 'PLAYING'; startBGM(); requestAnimationFrame(gameLoop); 
 }
 function triggerGameOver() {
@@ -382,7 +385,17 @@ function gameLoop() {
                 else if (obs.name === 'proteinJar') { supplementCount++; playCoinSound(); } 
                 else if (obs.name === 'starCapsule') {
                     isInvincible = true; invincibilityTimer = 600; flashTimer = 0; playStarSound();
-                    const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); if (bgm && starBgm && !isMuted) { bgm.pause(); starBgm.currentTime = 0; starBgm.play().catch(e=>{}); }
+                    
+                    // ★【究極修正】処理を0.05秒だけズラして再生を確定させる！
+                    const bgm = document.getElementById('bgm'); 
+                    const starBgm = document.getElementById('star_bgm'); 
+                    if (bgm && starBgm && !isMuted) { 
+                        bgm.pause(); 
+                        setTimeout(() => {
+                            starBgm.currentTime = 0; 
+                            starBgm.play().catch(e => console.log("再生失敗:", e));
+                        }, 50); 
+                    }
                 }
                 staticObstacles.splice(i, 1);
             }
