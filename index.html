@@ -470,7 +470,7 @@ function gameLoop() {
 }
 
 // ==========================================
-// 🔌 6. イベントシステム（★マルチタッチ＆音量完全修復）
+// 🔌 6. 各種イベント登録（★1本指タップ・2本指同時スワイプジャンプ完全完全修復）
 // ==========================================
 const mSwitch = document.getElementById('mute-switch'); 
 const bSoundOn = document.getElementById('btn-sound-on'); 
@@ -489,24 +489,28 @@ document.getElementById('btn-result-forced').addEventListener('click', (e) => { 
 window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); processInput(); } if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); keysPressed[e.code] = true; } if (e.code === 'ArrowDown') { e.preventDefault(); keysPressed[e.code] = true; } });
 window.addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { keysPressed[e.code] = false; } if (e.code === 'ArrowDown') { keysPressed[e.code] = false; appKun.isCrouching = false; } });
 
-// 🔥【超絶リライト】2指同時操作マルチタッチ・アルゴリズム
+// 🔥【超絶確定版】1本指・2本指のあらゆるシチュエーションで絶対にジャンプさせる最新タッチ物理
 window.addEventListener('touchstart', (e) => { 
-    // 右上の音量ボタンを触ったときは100%最優先で即時反応して処理を抜ける（バグ完全根絶）
+    // 右上の音量ボタンは最優先反応
     if (e.target.closest('#mute-switch')) { toggleMuteAction(e); return; }
     if (e.target.closest('#start-screen') || e.target.closest('#result-mode-select')) return; 
     if (gameState === 'GAMEOVER') { processInput(); return; } 
     if (e.cancelable) e.preventDefault();
 
-    // 画面に新しく触れたすべての指の座標をIDごとに登録
+    // 画面に触れた指をすべて追跡登録
     for (let i = 0; i < e.changedTouches.length; i++) {
         let t = e.changedTouches[i];
-        activeTouches[t.identifier] = { startX: t.clientX, startY: t.clientY, lastX: t.clientX };
+        activeTouches[t.identifier] = { 
+            startX: t.clientX, 
+            startY: t.clientY, 
+            isTapCandidate: true // 最初はすべて「タップ（ジャンプ）されるかも」フラグを立てる
+        };
         
-        // もしまだ移動用の指が決まっていないなら、この指を移動用にバインドする
+        // 移動用の指がまだ決まってないならバインド
         if (moveTouchId === null) {
             moveTouchId = t.identifier;
         } else {
-            // ★【核心！】すでに1本目の指で走っている最中に、2本目の指が画面を叩いたらジャンプを即トリガー！！
+            // ★【2本指時】すでに1本目で走っている最中に2本目が画面を叩いたら、即時100%ジャンプ発動！！
             processInput();
         }
     }
@@ -516,22 +520,25 @@ window.addEventListener('touchmove', (e) => {
     if (gameState !== 'PLAYING') return; 
     if (e.cancelable) e.preventDefault(); 
     
-    // 画面上で動いている指をすべてスキャン
     for (let i = 0; i < e.touches.length; i++) {
         let t = e.touches[i];
         let data = activeTouches[t.identifier];
         if (!data) continue;
         
-        // 移動担当の指の動きを解析
+        const diffX = t.clientX - data.startX; 
+        const diffY = t.clientY - data.startY; 
+        
+        // 指が一定以上（15ピクセル以上）動いたら「ただのタップではない（スワイプ移動である）」と判定してジャンプ候補から外す
+        if (Math.abs(diffX) > 15 || Math.abs(diffY) > 15) {
+            data.isTapCandidate = false;
+        }
+
+        // 移動担当の指の動きを左右移動・しゃがみに反映
         if (t.identifier === moveTouchId) {
-            const diffX = t.clientX - data.startX; 
-            const diffY = t.clientY - data.startY; 
-            
             if (diffY > 30 && appKun.isGrounded) { appKun.isCrouching = true; touchMoveDirection = 0; return; } 
             
             if (!appKun.isCrouching) { 
-                // 地上でも空中でも、指の左右スワイプをダイレクトに移動方向に代入！
-                if (Math.abs(diffX) > 15) { touchMoveDirection = diffX > 0 ? 1 : -1; } 
+                if (Math.abs(diffX) > 15) { isDragging = true; touchMoveDirection = diffX > 0 ? 1 : -1; } 
                 else { touchMoveDirection = 0; } 
             }
         }
@@ -543,20 +550,27 @@ window.addEventListener('touchend', (e) => {
     if (gameState === 'START') return; 
     if (e.cancelable) e.preventDefault(); 
     
-    // 画面から離れた指を追跡
     for (let i = 0; i < e.changedTouches.length; i++) {
         let t = e.changedTouches[i];
+        let data = activeTouches[t.identifier];
         
-        // 離れた指が「スワイプ移動を担当していた指」だった場合、移動をストップ
+        // ★【1本指時】画面から指が離れたとき、その指が大きく動いていなかった（isTapCandidateがtrue）なら1本指ジャンプを発動！！
+        if (data && data.isTapCandidate) {
+            processInput();
+        }
+        
+        // 離れた指が移動用だったらリセット
         if (t.identifier === moveTouchId) {
             appKun.isCrouching = false;
             touchMoveDirection = 0;
-            moveTouchId = null; // 移動担当をリセット
+            isDragging = false;
+            swipeTriggered = false;
+            moveTouchId = null; 
         }
         delete activeTouches[t.identifier];
     }
     
-    // 移動担当が空席になった場合、まだ画面に残っている別の指があればそっちに権利を移す
+    // 他の指への権利委譲
     if (moveTouchId === null) {
         let remainingIds = Object.keys(activeTouches);
         if (remainingIds.length > 0) {
@@ -564,6 +578,4 @@ window.addEventListener('touchend', (e) => {
         }
     }
 });
-</script>
-</body>
-</html>
+if(mSwitch) { mSwitch.addEventListener('click', toggleMuteAction); mSwitch.addEventListener('touchend', toggleMuteAction); }
