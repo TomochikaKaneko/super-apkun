@@ -115,10 +115,12 @@ let shrinkFlashTimer = 0;
 
 const keysPressed = { ArrowLeft: false, ArrowRight: false, ArrowDown: false };
 
-// ★【大改修】マルチタッチ監視用の最新変数群
-let activeTouches = {}; // 画面に触れている指をすべてID管理
-let moveTouchId = null;  // スワイプ移動を担当している指のID
+// マルチタッチ制御用のグローバル変数
+let activeTouches = {}; 
+let moveTouchId = null;  
 let touchMoveDirection = 0; 
+let isDragging = false; 
+let swipeTriggered = false; 
 
 let cameraX = 0;
 let supplementCount = 0; 
@@ -185,7 +187,7 @@ function playJumpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (
 function playCoinSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sine'; const now = audioCtx.currentTime; osc.frequency.setValueAtTime(987, now); osc.frequency.exponentialRampToValueAtTime(1318, now + 0.08); gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + 0.25); } catch(e) {} } }
 function playPowerUpSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [330, 392, 659, 523, 587, 784].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
 function playShrinkSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [784, 587, 523, 392].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'sawtooth'; osc.frequency.setValueAtTime(f, now + i*0.05); gain.gain.setValueAtTime(0.2, now + i*0.05); gain.gain.linearRampToValueAtTime(0.01, now + i*0.05 + 0.1); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.05); osc.stop(now + i*0.05 + 0.1); }); } catch(e) {} } }
-function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
+function playStarSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; [523, 659, 784, 1046].forEach((f, i) => { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(f, now + i*0.06); gain.gain.setValueAtTime(0.3, now + i*0.06); gain.gain.linearRampToValueAtTime(0.01, now + i*0.06 + 0.15); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + i*0.06); osc.stop(now + i*0.06 + 0.15); }); } catch(e) {} } }
 function playGameOverSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 494, d: 0.08 }, { f: 440, d: 0.08 }, { f: 392, d: 0.12 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 349, d: 0.16 }, { f: 0, d: 0.04 }, { f: 311, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.4, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 function playNewRecordSound() { if (!isMuted) { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const now = audioCtx.currentTime; const melody = [{ f: 523, d: 0.08 }, { f: 659, d: 0.08 }, { f: 784, d: 0.08 }, { f: 1046,d: 0.16 }, { f: 0, d: 0.04 }, { f: 880, d: 0.12 }, { f: 987, d: 0.12 }, { f: 1046,d: 0.24 }, { f: 466, d: 0.40 }]; let currentOffset = 0; melody.forEach((note) => { if (note.f > 0) { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.type = 'square'; osc.frequency.setValueAtTime(note.f, now + currentOffset); gain.gain.setValueAtTime(0.35, now + currentOffset); gain.gain.linearRampToValueAtTime(0.01, now + currentOffset + note.d); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(now + currentOffset); osc.stop(now + currentOffset + note.d); } currentOffset += note.d; }); } catch(e) {} } }
 
@@ -237,7 +239,7 @@ function initGame() {
     appKun.x = 80; appKun.y = appKun.baseY; appKun.vy = 0; appKun.isGrounded = true; appKun.isCrouching = false; 
     appKun.animeFrame = 0; appKun.animeTimer = 0; appKun.landSquat = 0; appKun.angle = 0; gameOverTimer = 0;
     keysPressed.ArrowLeft = false; keysPressed.ArrowRight = false; keysPressed.ArrowDown = false;
-    touchMoveDirection = 0; activeTouches = {}; moveTouchId = null;
+    touchMoveDirection = 0; activeTouches = {}; moveTouchId = null; isDragging = false; swipeTriggered = false;
     staticObstacles = []; holes = []; lastGeneratedX = 400;
     for(let i=0; i<6; i++) { generateNextTerrain(); }
 }
@@ -271,7 +273,6 @@ function syncModeSelection(mode) {
     }
 }
 
-// ★独立音量調整（タッチブロックに絶対に巻き込まれない構造にリペア）
 function toggleMuteAction(e) { 
     if(e) { e.stopPropagation(); e.preventDefault(); }
     const bgm = document.getElementById('bgm'); const starBgm = document.getElementById('star_bgm'); const mSwitch = document.getElementById('mute-switch');
@@ -291,7 +292,6 @@ function gameLoop() {
         if (isInvincible) { invincibilityTimer--; flashTimer++; if (invincibilityTimer <= 0) { isInvincible = false; startBGM(); } }
         if (shrinkFlashTimer > 0) { shrinkFlashTimer--; }
 
-        // モード別空中制御ロジック
         if (gameMode === 'FORCED') {
             scrollSpeed = 5; isMovingNow = true; distance += scrollSpeed * 0.05;
             if (!appKun.isCrouching) {
@@ -369,7 +369,7 @@ function gameLoop() {
         // アニメーション制御
         if (appKun.isGrounded && !appKun.isCrouching) {
             appKun.angle = 0;
-            if (isMovingNow) { appKun.animeTimer += 5; if (appKun.animeFrame === 0 && appKun.animeTimer > 60) { appKun.animeFrame = 1; appKun.animeTimer = 0; } else if (appKun.animeFrame === 1 && appKun.animeTimer > 60) { appKun.animeFrame = 0; appKun.animeTimer = 0; } } 
+            if (isMovingNow) { appKun.animeTimer += 5; if (appKun.animeTimer > 60) { appKun.animeFrame = appKun.animeFrame === 0 ? 1 : 0; appKun.animeTimer = 0; } } 
             else { appKun.animeFrame = 0; }
         } else if (!appKun.isGrounded) { appKun.animeFrame = 1; appKun.angle = appKun.vy * 0.02; appKun.isCrouching = false; }
         if (appKun.landSquat > 0) { appKun.landSquat -= 0.4; }
@@ -405,7 +405,7 @@ function gameLoop() {
         }
     }
 
-    // 背景・描画
+    // 描画
     if (images.bg && images.bg.complete) { ctx.drawImage(images.bg, bgOffset, 0, 800, 270); ctx.drawImage(images.bg, bgOffset + 800, 0, 800, 270); }
     let currentFloorX = 0;
     while (currentFloorX < 800) {
@@ -470,7 +470,7 @@ function gameLoop() {
 }
 
 // ==========================================
-// 🔌 6. 各種イベント登録（★1本指タップ・2本指同時スワイプジャンプ完全完全修復）
+// 🔌 6. イベントシステム（★大完全修復・合流完了）
 // ==========================================
 const mSwitch = document.getElementById('mute-switch'); 
 const bSoundOn = document.getElementById('btn-sound-on'); 
@@ -489,29 +489,21 @@ document.getElementById('btn-result-forced').addEventListener('click', (e) => { 
 window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); processInput(); } if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); keysPressed[e.code] = true; } if (e.code === 'ArrowDown') { e.preventDefault(); keysPressed[e.code] = true; } });
 window.addEventListener('keyup', (e) => { if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { keysPressed[e.code] = false; } if (e.code === 'ArrowDown') { keysPressed[e.code] = false; appKun.isCrouching = false; } });
 
-// 🔥【超絶確定版】1本指・2本指のあらゆるシチュエーションで絶対にジャンプさせる最新タッチ物理
+// マルチタッチ対応イベント
 window.addEventListener('touchstart', (e) => { 
-    // 右上の音量ボタンは最優先反応
     if (e.target.closest('#mute-switch')) { toggleMuteAction(e); return; }
     if (e.target.closest('#start-screen') || e.target.closest('#result-mode-select')) return; 
     if (gameState === 'GAMEOVER') { processInput(); return; } 
     if (e.cancelable) e.preventDefault();
 
-    // 画面に触れた指をすべて追跡登録
     for (let i = 0; i < e.changedTouches.length; i++) {
         let t = e.changedTouches[i];
-        activeTouches[t.identifier] = { 
-            startX: t.clientX, 
-            startY: t.clientY, 
-            isTapCandidate: true // 最初はすべて「タップ（ジャンプ）されるかも」フラグを立てる
-        };
+        activeTouches[t.identifier] = { startX: t.clientX, startY: t.clientY, isTapCandidate: true };
         
-        // 移動用の指がまだ決まってないならバインド
         if (moveTouchId === null) {
             moveTouchId = t.identifier;
         } else {
-            // ★【2本指時】すでに1本目で走っている最中に2本目が画面を叩いたら、即時100%ジャンプ発動！！
-            processInput();
+            processInput(); // 2本指同時タップ時
         }
     }
 }, { passive: false });
@@ -528,15 +520,12 @@ window.addEventListener('touchmove', (e) => {
         const diffX = t.clientX - data.startX; 
         const diffY = t.clientY - data.startY; 
         
-        // 指が一定以上（15ピクセル以上）動いたら「ただのタップではない（スワイプ移動である）」と判定してジャンプ候補から外す
         if (Math.abs(diffX) > 15 || Math.abs(diffY) > 15) {
             data.isTapCandidate = false;
         }
 
-        // 移動担当の指の動きを左右移動・しゃがみに反映
         if (t.identifier === moveTouchId) {
             if (diffY > 30 && appKun.isGrounded) { appKun.isCrouching = true; touchMoveDirection = 0; return; } 
-            
             if (!appKun.isCrouching) { 
                 if (Math.abs(diffX) > 15) { isDragging = true; touchMoveDirection = diffX > 0 ? 1 : -1; } 
                 else { touchMoveDirection = 0; } 
@@ -554,12 +543,10 @@ window.addEventListener('touchend', (e) => {
         let t = e.changedTouches[i];
         let data = activeTouches[t.identifier];
         
-        // ★【1本指時】画面から指が離れたとき、その指が大きく動いていなかった（isTapCandidateがtrue）なら1本指ジャンプを発動！！
         if (data && data.isTapCandidate) {
-            processInput();
+            processInput(); // 1本指単発タップジャンプ！
         }
         
-        // 離れた指が移動用だったらリセット
         if (t.identifier === moveTouchId) {
             appKun.isCrouching = false;
             touchMoveDirection = 0;
@@ -570,12 +557,12 @@ window.addEventListener('touchend', (e) => {
         delete activeTouches[t.identifier];
     }
     
-    // 他の指への権利委譲
     if (moveTouchId === null) {
         let remainingIds = Object.keys(activeTouches);
-        if (remainingIds.length > 0) {
-            moveTouchId = parseInt(remainingIds[0]);
-        }
+        if (remainingIds.length > 0) { moveTouchId = parseInt(remainingIds[0]); }
     }
 });
 if(mSwitch) { mSwitch.addEventListener('click', toggleMuteAction); mSwitch.addEventListener('touchend', toggleMuteAction); }
+</script>
+</body>
+</html>
