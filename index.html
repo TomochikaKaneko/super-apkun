@@ -207,7 +207,8 @@ function generateNextTerrain() {
         staticObstacles.push({ x: startX + 30, y: 130, width: 30, height: 40, name: 'proteinJar', type: 'item', vy: 0 }); 
         lastGeneratedX = startX + 150;
     } else if (type === 1) { 
-        let blockType = 'brick'; if (distance > 0 && Math.floor(distance) % 200 <= 25 && Math.random() < 0.50) { blockType = 'blockSpecial'; }
+        let blockType = 'brick'; //if (distance > 0 && Math.floor(distance) % 200 <= 25 && Math.random() < 1.0) { blockType = 'blockSpecial'; }
+        if (Math.random() < 0.60) { blockType = 'blockSpecial'; }
         staticObstacles.push({ x: startX, y: 140, width: 30, height: 30, name: blockType, type: 'platform' });
         staticObstacles.push({ x: startX + 35, y: 140, width: 30, height: 30, name: 'brick', type: 'platform' });
         lastGeneratedX = startX + 160;
@@ -464,7 +465,7 @@ function gameLoop() {
         ctx.save(); let drawWidth = appKun.imgWidth; let drawHeight = appKun.imgHeight; let drawY = appKun.y + appKun.landSquat;
         if (isBig) { drawWidth *= 1.4; drawHeight *= 1.4; drawY -= 20; }
         ctx.translate(appKun.x + drawWidth / 2, drawY + drawHeight / 2); ctx.rotate(appKun.angle);
-        if (isInvincible) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${flashTimer * 10 % 360}, 100%, 60%)`; } else if (isBig) { ctx.shadowBlur = 15; ctx.shadowColor = '#ff4757'; }
+        if (isInvincible) { ctx.shadowBlur = 20; ctx.shadowColor = `hsl(${flashTimer * 10 % 360}, 100%, 60%)`; } //else if (isBig) { ctx.shadowBlur = 15; ctx.shadowColor = '#ff4757'; }
         // ★【修正】しゃがみ画像（appKun3）の呼び出しを完全に撤廃し、appKun1とappKun2だけで綺麗にパラパラ走るように統一！
         let currentAppImage = (appKun.animeFrame === 0 ? images.appKun1 : images.appKun2);
         ctx.drawImage(currentAppImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); ctx.restore();
@@ -474,8 +475,8 @@ function gameLoop() {
     if (gameState === 'PLAYING') {
         if (images.proteinJar && images.proteinJar.complete) { ctx.drawImage(images.proteinJar, 20, 20, 22, 30); }
         ctx.fillStyle = '#2f3542'; ctx.font = 'bold 20px "DotGothic16"'; ctx.textAlign = 'left'; ctx.fillText(` ✕ ${supplementCount}`, 45, 42); ctx.fillText(`SCORE: ${currentScore.toLocaleString()}点`, 160, 42);
-        if (isInvincible) { ctx.fillStyle = '#eccc68'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`🌟スター無敵: ${Math.ceil(invincibilityTimer / 60)}秒`, 20, 80); } 
-        else if (isBig) { ctx.fillStyle = '#ff4757'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`🍖スーパーマッスル(ブロック破壊OK)`, 20, 80); }
+        if (isInvincible) { ctx.fillStyle = '#eccc68'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`クレアチン注入: ${Math.ceil(invincibilityTimer / 60)}秒`, 20, 80); } 
+        else if (isBig) { ctx.fillStyle = '#ff4757'; ctx.font = '20px "DotGothic16"'; ctx.fillText(`パンプアップモード`, 20, 80); }
     }
     if (gameState === 'PLAYING') { ctx.fillStyle = '#2f3542'; ctx.font = '14px "DotGothic16"'; ctx.fillText(`🏆最高スコア: ${highScore.toLocaleString()}点`, 20, 290); }
 
