@@ -234,6 +234,7 @@ function generateNextTerrain() {
 }
 
 function initGame() {
+    gameOverTimer = 0;
     distance = 0; cameraX = 0; supplementCount = 0; meatRotation = 0; capsuleRotation = 0; currentSpeed = 5; currentScore = 0; enemyBonusScore = 0; nextStarDistance = 300; 
     isInvincible = false; invincibilityTimer = 0; flashTimer = 0; isBig = false; shrinkFlashTimer = 0;
     appKun.x = 80; appKun.y = appKun.baseY; appKun.vy = 0; appKun.isGrounded = true; 
@@ -261,7 +262,15 @@ function processInput() {
     if (gameState === 'START') { handleGameStartAction(); } 
     // ★【修正】しゃがみフラグ削除に伴い、純粋に「地面にいるとき」だけ飛べるように調整！
     else if (gameState === 'PLAYING') { if (appKun.isGrounded) { appKun.vy = appKun.jumpForce; appKun.isGrounded = false; playJumpSound(); } } 
-    else if (gameState === 'GAMEOVER') { if (gameOverTimer > 48) { document.getElementById('result-mode-select').style.display = 'none'; initGame(); gameState = 'PLAYING'; startBGM(); } }
+    else if (gameState === 'GAMEOVER') { 
+        // 0.8秒経過するまで完全に門前払いする
+        if (gameOverTimer > 48) { 
+            document.getElementById('result-mode-select').style.display = 'none'; 
+            initGame(); 
+            gameState = 'PLAYING'; 
+            startBGM(); 
+        } 
+    }
 }
 
 function syncModeSelection(mode) {
