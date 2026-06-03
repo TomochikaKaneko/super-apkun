@@ -198,7 +198,20 @@ function startBGM() { stopAllMusic(); if (isMuted) return; const bgm = document.
 // ⚙️ 4. コア物理・ロジック関数群
 // ==========================================
 function generateNextTerrain() {
-    let type = Math.floor(Math.random() * 6);
+    //let type = Math.floor(Math.random() * 6);
+    if (distance > 1500) {
+        let rand = Math.random();
+        if (rand < 0.5) type = 5;      // 50%で強敵
+        else if (rand < 0.6) type = 1; // 10%でお肉
+        else type = Math.floor(Math.random() * 6);
+    } else if (distance > 1000) {
+        let rand = Math.random();
+        if (rand < 0.3) type = 5;      // 30%で強敵
+        else if (rand < 0.5) type = 1; // 20%でお肉
+        else type = Math.floor(Math.random() * 6);
+    } else {
+        type = Math.floor(Math.random() * 6);
+    }
     let difficultyBonus = (gameMode === 'FORCED') ? 0 : Math.min(100, distance * 0.2); 
     let startX = lastGeneratedX + (220 - difficultyBonus) + Math.random() * 100;
 
@@ -231,6 +244,37 @@ function generateNextTerrain() {
             staticObstacles.push({ x: startX, y: 210, width: 40, height: 40, name: 'dumbbell', type: 'enemy', vx: -1.5, vy: 0, range: 100, counter: 0 });
             lastGeneratedX = startX + 120;
         }
+    }
+
+   // ★後半戦用：敵増量システム（ダンベルと上下シェイカーのコンビ）
+    if (distance > 1500) {
+        // 1500m以降：ダンベル ＆ 悪アップ君のコンビ
+        let extraEnemyCount = Math.floor(Math.random() * 2) + 2;
+        for (let i = 0; i < extraEnemyCount; i++) {
+            let spawnX = lastGeneratedX + 50 + (i * 150);
+            if (i % 2 === 0) {
+                // ダンベル
+                staticObstacles.push({ x: spawnX, y: 210, width: 40, height: 40, name: 'dumbbell', type: 'enemy', vx: -1.5, vy: 0, range: 50, counter: 0 });
+            } else {
+                // 悪アップ君
+                staticObstacles.push({ x: spawnX, y: 15, width: 80, height: 110, name: 'evilAppKun', type: 'enemy', vx: -1.2, vy: 0, range: 250, counter: 0, dropTimer: 0 });
+            }
+        }
+        lastGeneratedX += 450;
+    } else if (distance > 1000) {
+        // 1000m〜1500m：ダンベル ＆ シェイカーのコンビ
+        let extraEnemyCount = Math.floor(Math.random() * 2) + 2;
+        for (let i = 0; i < extraEnemyCount; i++) {
+            let spawnX = lastGeneratedX + 50 + (i * 150);
+            if (i % 2 === 0) {
+                // ダンベル
+                staticObstacles.push({ x: spawnX, y: 210, width: 40, height: 40, name: 'dumbbell', type: 'enemy', vx: -1.5, vy: 0, range: 50, counter: 0 });
+            } else {
+                // シェイカー
+                staticObstacles.push({ x: spawnX, y: 100, width: 40, height: 25, name: 'shaker', type: 'enemy', vx: 0, vy: -2.2, range: 130, counter: 0, initialY: 100 });
+            }
+        }
+        lastGeneratedX += 450;
     }
 }
 
@@ -335,6 +379,9 @@ function gameLoop() {
 
         let newDroppedKettlebells = [];
         staticObstacles.forEach(obs => {
+            // ★追加：画面から大きく外れた敵は計算処理をスキップ！
+            // (x座標が -500 未満、または 1300 を超えたら計算しない)
+            //if (obs.x < -500 || obs.x > 1300) return;
             obs.x -= scrollSpeed; 
             if (obs.name === 'starCapsule') { if (obs.vx) obs.x += obs.vx; obs.waveCounter += 0.05; obs.y = obs.baseY + Math.sin(obs.waveCounter) * 25; }
             if (obs.type === 'enemy') {
@@ -410,6 +457,10 @@ function gameLoop() {
                 staticObstacles.splice(i, 1);
             }
         }
+
+        // ★【修正】画面外（x < -100）に出た古い障害物をリストから削除してメモリを解放する！
+        staticObstacles = staticObstacles.filter(obs => obs.x > -100);
+        holes = holes.filter(hole => hole.endX > -100);
 
         // 撃破・被弾
         for (let i = staticObstacles.length - 1; i >= 0; i--) {
